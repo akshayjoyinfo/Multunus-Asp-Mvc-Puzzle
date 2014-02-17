@@ -23,5 +23,12 @@ namespace MultunusMvcPuzzle.Models
             get;
             set;
         }
+
+        // Error Related Properties
+
+        public string ErrorMessage { get; set; }
+        public string ErrorMethod { get; set; }
+        public string ErrorController { get; set; }
+        public string ErrorDIVInfo { get; set; }
     }
 }

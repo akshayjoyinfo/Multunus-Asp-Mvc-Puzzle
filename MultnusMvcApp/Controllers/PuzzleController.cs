@@ -40,97 +40,112 @@ namespace MultunusMvcPuzzle.Controllers
             string TwitterTokenKey = string.Empty;
             bool handleExist = false;
             TwitterDIVInfo TwitterDIVInfoObject = new TwitterDIVInfo();
+            TwitterDIVInfoObject.ErrorController = "PuzzleController";
+            TwitterDIVInfoObject.ErrorMethod = "PuzzleResult";
 
-            if (Request.Form["txtTwitterHandle"] != null)
+            try
             {
-                string url = Request.Form["txtTwitterHandle"].ToString();
-                string[] URLContents = url.Split('/');
-
-                Int64 status = Convert.ToInt64(URLContents[URLContents.Length - 1]);
-                string tweetedUser = URLContents[URLContents.Length - 3];
-
-                
-
-                if (URLContents.Length >= 6)
+                if (Request.Form["txtTwitterHandle"] != null)
                 {
-                    TwitterTokenKey = tweetedUser + TWITTER_TOKEN_SEPERATOR + status;
+                    string url = Request.Form["txtTwitterHandle"].ToString();
+                    string[] URLContents = url.Split('/');
 
-                    handleExist = TwitterSharedLib.IsTwitterHandleExist(TwitterTokenKey);
-
-                    if (handleExist == false)
+                    if (URLContents.Length >= 6)
                     {
+                        Int64 status = Convert.ToInt64(URLContents[URLContents.Length - 1]);
+                        string tweetedUser = URLContents[URLContents.Length - 3];
 
-                        var service = new TwitterService(twitterconsumerKey, twxitterCosnumerSecret);
-                        service.AuthenticateWith(twitterAccessToken, twitterAccessTokenSecret);
+                        TwitterTokenKey = tweetedUser + TWITTER_TOKEN_SEPERATOR + status;
 
-                        RetweetsOptions tweetOptions = new RetweetsOptions();
-                        tweetOptions.Id = status;
-                        tweetOptions.Count = NUMBER_OF_RETWEETS;
+                        handleExist = TwitterSharedLib.IsTwitterHandleExist(TwitterTokenKey);
 
-                        //Twitteru
-                        GetTweetOptions tweetUser = new GetTweetOptions();
-                        //tweetUser.IncludeEntities=true;
-                        tweetUser.Id = status;
-
-                        TwitterStatus tweetOwner = service.GetTweet(tweetUser);
-                        string MainCircleURL = tweetOwner.Author.ProfileImageUrl.Replace("_normal", "");
-
-                        List<TwitterStatus> tweets = (List<TwitterStatus>)service.Retweets(tweetOptions);
-
-                        if (tweets != null)
+                        if (handleExist == false)
                         {
-                            int tweetCount = 9;
 
-                            if (tweets.Count >= NUMBER_OF_RETWEETS)
+                            var service = new TwitterService(twitterconsumerKey, twxitterCosnumerSecret);
+                            service.AuthenticateWith(twitterAccessToken, twitterAccessTokenSecret);
+
+                            RetweetsOptions tweetOptions = new RetweetsOptions();
+                            tweetOptions.Id = status;
+                            tweetOptions.Count = NUMBER_OF_RETWEETS;
+
+                            //Twitteru
+                            GetTweetOptions tweetUser = new GetTweetOptions();
+                            //tweetUser.IncludeEntities=true;
+                            tweetUser.Id = status;
+
+                            TwitterStatus tweetOwner = service.GetTweet(tweetUser);
+                            string MainCircleURL = tweetOwner.Author.ProfileImageUrl.Replace("_normal", "");
+
+                            List<TwitterStatus> tweets = (List<TwitterStatus>)service.Retweets(tweetOptions);
+
+                            if (tweets != null)
                             {
-                                tweetCount = 10;
+                                int tweetCount = 9;
+
+                                if (tweets.Count >= NUMBER_OF_RETWEETS)
+                                {
+                                    tweetCount = 10;
+                                }
+                                else
+                                {
+                                    tweetCount = tweets.Count;
+                                }
+
+
+                                List<TwitterStatus> Sortedtweets = (List<TwitterStatus>)tweets.OrderByDescending(tw => tw.User.FollowersCount).ToList().GetRange(0, tweetCount);
+
+                                TwitterDIVInfoObject = SetTweetImages(MainCircleURL, Sortedtweets);
+
+                                bool success = TwitterSharedLib.StoreTwitterHandle(MainCircleURL, Sortedtweets, TwitterTokenKey, DateTime.Now);
+
                             }
                             else
                             {
-                                tweetCount = tweets.Count;
+
+                                
+                                TwitterDIVInfoObject.ErrorMessage = "Failled to get Tweitter Handle, Please try again later";
+                              
+
                             }
-
-
-                            List<TwitterStatus> Sortedtweets = (List<TwitterStatus>)tweets.OrderByDescending(tw => tw.User.FollowersCount).ToList().GetRange(0, tweetCount);
-
-                            TwitterDIVInfoObject = SetTweetImages(MainCircleURL, Sortedtweets);
-
-                            bool success = TwitterSharedLib.StoreTwitterHandle(MainCircleURL, Sortedtweets, TwitterTokenKey, DateTime.Now);
-
                         }
                         else
                         {
-                            Response.Write("<script>alert('Failled to get Tweitter Handle, Please try again later');</script>");
+                            TwitterSessionState twitterSession = TwitterSharedLib.GetTwitterHandle(TwitterTokenKey);
+                            if (twitterSession != null)
+                            {
+                                TwitterDIVInfoObject = SetTweetImages(twitterSession.ProfileImageUrl, twitterSession.RetweetedStatusInformation);
+                            }
+                            else
+                            {
+                                Request.Form["txtTwitterHandle"] = null;
+                                TwitterDIVInfoObject.ErrorMessage = "Unknown error occurred setting Twitter Images ";
+                                
+
+
+                            }
                         }
                     }
                     else
                     {
-                        TwitterSessionState twitterSession = TwitterSharedLib.GetTwitterHandle(TwitterTokenKey);
-                        if (twitterSession != null)
-                        {
-                            TwitterDIVInfoObject = SetTweetImages(twitterSession.ProfileImageUrl, twitterSession.RetweetedStatusInformation);
-                        }
-                        else
-                        {
-                            Response.Write("<script>alert('Error Occured Try again');</script>");
-                            Request.Form["txtTwitterHandle"] = null;
 
-                        }
+                        TwitterDIVInfoObject.ErrorMessage = "Please check the Tweet URL, Tweet id is missing";
+                        
                     }
+
                 }
                 else
                 {
-                    Response.Write("<script>alert('Please check the Tweet URL, Tweet id is missing');</script>");
-                    Response.Redirect("~/");
+
+                    TwitterDIVInfoObject.ErrorMessage = "URL is Empty , Please try again later";
+
                 }
-
             }
-            else
+            catch (Exception exp)
             {
-                Response.Redirect("~/");
-
+                TwitterDIVInfoObject.ErrorMessage = "An Unknown error occured :- " + exp.Message;
+                
             }
-
             return View(TwitterDIVInfoObject);
         }
 
